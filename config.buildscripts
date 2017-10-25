@@ -1,0 +1,11 @@
+#!/bin/bash
+
+echo "Do not execure this, and do not edit"
+exit 1
+
+DEVICE=taoshan
+BRANCH=mm
+VER=N
+CLEAN_TOOLCHAIN_PATH="$HOME/Git/toolchains/clean-tc"
+TOOLCHAIN_PATH="$HOME/Git/toolchains/4.8_a15"
+ONLYZIMAGE=true
