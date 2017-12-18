@@ -22,6 +22,7 @@
 #include <linux/mfd/pm8xxx/vibrator.h>
 
 #include "../staging/android/timed_output.h"
+#include "pm8xxx-vibrator.h"
 
 #define VIB_DRV			0x4A
 
@@ -181,6 +182,32 @@ static int pm8xxx_vib_set(struct pm8xxx_vib *vib, int on)
 	__dump_vib_regs(vib, "vib_set_end");
 
 	return rc;
+}
+
+void pm8xxx_vib_enable_ms(int value)
+{
+	unsigned long flags;
+
+retry:
+	if( vib_dev != NULL ) {
+		spin_lock_irqsave(&vib_dev->lock, flags);
+		if (hrtimer_try_to_cancel(&vib_dev->vib_timer) < 0) {
+			spin_unlock_irqrestore(&vib_dev->lock, flags);
+			cpu_relax();
+			goto retry;
+		}
+
+		if( value == 0 ) {
+			vib_dev->state = 0;
+		}
+		else {
+			value = (value > vib_dev->pdata->max_timeout_ms ?  vib_dev->pdata->max_timeout_ms : value);
+			vib_dev->state = 1;
+			hrtimer_start(&vib_dev->vib_timer, ktime_set(value / 1000, (value % 1000) * 1000000), HRTIMER_MODE_REL);
+		}
+		spin_unlock_irqrestore(&vib_dev->lock, flags);
+		schedule_work(&vib_dev->work);
+	}
 }
 
 static void pm8xxx_vib_enable(struct timed_output_dev *dev, int value)

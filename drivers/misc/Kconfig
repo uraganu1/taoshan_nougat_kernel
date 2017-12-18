@@ -607,6 +607,12 @@ config ANDROID_VIBRATOR
 	  This option enalbes device driver support for Android Vibrator driver.
 	  Some functions should be given by platform data for enable PWM, Motor IC, etc.
 
+config PROXIMITY_DOUBLEWAVE2WAKE
+	bool "Wakeup by proximity sensor"
+	default n
+	help
+	This enables the wake up service by the proximity sensor.
+
 config TOUCHSENSE_VIBRATOR
 	bool "Immersion Touchsense vibrator support"
 	help
