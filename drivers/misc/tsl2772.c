@@ -694,7 +694,7 @@ static irqreturn_t taos_irq(int irq, void *handle)
 	struct tsl2772_chip *chip = handle;
 	struct device *dev = &chip->client->dev;
 
-	printk("\n [andy_test] %s,pending=%d\n", __FUNCTION__,chip->irq_pending);
+	//printk("\n [andy_test] %s,pending=%d\n", __FUNCTION__,chip->irq_pending);
 
 	if(chip->irq_pending)
 		return IRQ_HANDLED;
@@ -702,7 +702,7 @@ static irqreturn_t taos_irq(int irq, void *handle)
 	mutex_lock(&chip->lock);
 	if (chip->in_suspend) {
 		dev_dbg(dev, "%s: in suspend\n", __func__);
-		printk("\n [andy_test] %s in suspend, detect=%d\n", __FUNCTION__,chip->prx_inf.detected);
+		//printk("\n [andy_test] %s in suspend, detect=%d\n", __FUNCTION__,chip->prx_inf.detected);
 		wake_lock_timeout(&chip->w_lock, 2*HZ);
 		chip->irq_pending = 1;
 		goto bypass;
@@ -715,7 +715,7 @@ bypass:
 	return IRQ_HANDLED;
 }
 
-static void set_pltf_settings(struct tsl2772_chip *chip, bool low_power)
+static bool set_pltf_settings(struct tsl2772_chip *chip, bool low_power)
 {
 	struct taos_raw_settings const *s = chip->pdata->raw_settings;
 	u8 *sh = chip->shadow;
@@ -723,7 +723,7 @@ static void set_pltf_settings(struct tsl2772_chip *chip, bool low_power)
 	int cci_board_type = board_type_with_hw_id();
 
 	if( chip->low_power == low_power )
-		return;
+		return false;
 
 	if (chip->blog)
 		printk("\n [andy_test] %s (board_type=%d) DVT3_1_HW_ID =%d\n", __FUNCTION__, cci_board_type, DVT3_1_BOARD_HW_ID );
@@ -754,7 +754,7 @@ static void set_pltf_settings(struct tsl2772_chip *chip, bool low_power)
 			sh[TSL277X_PRX_PULSE_COUNT] = 16;
 		}
 
-		sh[TSL277X_CONTROL] = AGAIN_8 | PGAIN_2 |	PDIOD_CH0 | PDRIVE_120MA;
+		sh[TSL277X_CONTROL] = AGAIN_8 | PGAIN_4 |	PDIOD_CH0 | PDRIVE_60MA;
 		if( low_power ) {
 			sh[TSL277X_CONTROL] = AGAIN_8 | PGAIN_4  | PDIOD_CH1 |  PDRIVE_30MA;
 			sh[TSL277X_PRX_PULSE_COUNT] = 8;
@@ -788,6 +788,7 @@ static void set_pltf_settings(struct tsl2772_chip *chip, bool low_power)
 	}
 	(void)set_als_gain(chip, chip->params.als_gain);
 	taos_calc_cpl(chip);
+	return true;
 }
 
 static int flush_regs(struct tsl2772_chip *chip)
@@ -1658,7 +1659,9 @@ static ssize_t tsl2772_prox_enable(struct device *dev,
 	if (strtobool(buf, &value))
 		return -EINVAL;
 
-	if (value){
+	if (value) {
+		if( chip->prx_enabled && dw2w_prx_enabled )
+			proximity_enable_store_exported(false);
 		taos_prox_enable(chip,1, false);
 		taos_check_and_report(chip);//report immediately
 
@@ -1674,17 +1677,17 @@ void proximity_enable_store_exported(bool enable)
 {
 	if( chip  == NULL )
 		return;
-	if( enable ) {
+	if( enable && !chip->prx_enabled  ) {
 		mutex_lock(&chip->lock);
-		set_pltf_settings(chip, true);
-		flush_regs(chip);
+		if( set_pltf_settings(chip, true) )
+			flush_regs(chip);
 		mutex_unlock(&chip->lock);
 	}
 	taos_prox_enable(chip,(int)enable, true);
 	if( !enable ) {
 		mutex_lock(&chip->lock);
-		set_pltf_settings(chip, false);
-		flush_regs(chip);
+		if( set_pltf_settings(chip, false) )
+			flush_regs(chip);
 		mutex_unlock(&chip->lock);
 	}
 	dw2w_prx_enabled = chip->prx_enabled;
